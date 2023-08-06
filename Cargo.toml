@@ -1,0 +1,18 @@
+[package]
+name = "fabric-rpc-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.service-fabric-rs]
+git = "https://github.com/youyuanwu/service-fabric-rs.git"
+rev = "556073113635e9f0af188e4ccefaffd922b779a7"
+features = ["implement"]
+
+[dependencies.windows]
+version = "0.43"
+features = [
+    "Win32_Foundation",
+    "implement"
+]
