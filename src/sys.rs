@@ -11,7 +11,7 @@ use service_fabric_rs::FabricCommon::{
 };
 
 use tokio::sync::oneshot::{self, Receiver, Sender};
-use windows::core::{implement, AsImpl, HSTRING};
+use windows::core::{implement, AsImpl, HSTRING, PCWSTR};
 
 #[allow(non_snake_case)]
 // awaitable callback is used to await a signal from fabric API.
@@ -39,11 +39,13 @@ impl IFabricAsyncOperationCallback_Impl for AwaitableCallback {
         let op = self.tx.take();
         if let Some(send) = op {
             send.send(()).unwrap();
+        } else {
+            panic!("AwaitableCallback can only be invoked once.");
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[implement(IFabricAsyncOperationContext)]
 pub struct Context {
     completed: bool,
@@ -120,6 +122,23 @@ impl IFabricAsyncOperationContext_Impl for Context {
     fn Cancel(&self) -> ::windows::core::Result<()> {
         // does not support cancel
         Ok(())
+    }
+}
+
+pub struct ContextWrapper {
+    ctx: IFabricAsyncOperationContext,
+}
+
+unsafe impl Send for ContextWrapper {}
+unsafe impl Sync for ContextWrapper {}
+
+impl ContextWrapper {
+    pub fn new(ctx: IFabricAsyncOperationContext) -> ContextWrapper {
+        ContextWrapper { ctx }
+    }
+
+    pub fn get(self) -> IFabricAsyncOperationContext {
+        self.ctx
     }
 }
 
@@ -246,6 +265,13 @@ impl StringViewer {
         // Hstring takes ownership
         HSTRING::from_wide(buff)
     }
+}
+
+pub fn raw_to_hstring(raw: *const u16) -> HSTRING {
+    let ptr = PCWSTR::from_raw(raw);
+    let id_slice = unsafe { ptr.as_wide() };
+    // hstring does not have hash impl
+    HSTRING::from_wide(id_slice)
 }
 
 #[cfg(test)]
