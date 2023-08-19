@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
+tonic = "0.9"
+prost = "0.11"
 
 [dependencies.service-fabric-rs]
 git = "https://github.com/youyuanwu/service-fabric-rs.git"
@@ -19,3 +21,7 @@ features = [
     "Win32_Foundation",
     "implement"
 ]
+
+[build-dependencies]
+tonic-build = "0.9"
+# protobuf-src = "1.1.0+21.5" // does not support windows.
