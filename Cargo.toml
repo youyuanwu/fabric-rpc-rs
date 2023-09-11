@@ -25,3 +25,11 @@ features = [
 [build-dependencies]
 tonic-build = "0.9"
 # protobuf-src = "1.1.0+21.5" // does not support windows.
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "my_benchmark"
+path = "src/benches/my_benchmark.rs"
+harness = false
