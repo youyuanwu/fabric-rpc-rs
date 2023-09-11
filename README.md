@@ -12,8 +12,14 @@ Cargo auto managed:
 * [fabric-metadata](https://github.com/youyuanwu/fabric-metadata). Service fabric support libraries.
 * [service-fabric-rs](https://github.com/youyuanwu/service-fabric-rs). Service fabric rust bindings.
 
+CMake auto managed:
+* [protoc/protobuf](https://github.com/protocolbuffers/protobuf). Protobuf parser.
+
 # Build and Test
 ```ps1
+# configure protoc dependency
+cmake . -B build
+
 # build code
 cargo build
 
