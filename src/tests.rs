@@ -129,16 +129,11 @@ async fn fabric_transport() {
 
 #[cfg(test)]
 mod hello_test {
-    use service_fabric_rs::{
-        FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS,
-        FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END, FABRIC_SECURITY_CREDENTIALS,
-        FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
-    };
-    use windows::core::{HRESULT, HSTRING};
+
+    use windows::core::{Error, HSTRING};
 
     use crate::{
-        client::Client,
-        client_tr::ClientTransport,
+        client::Client2,
         server::{encode_proto, parse_proto, Server, Service},
     };
 
@@ -198,13 +193,14 @@ mod hello_test {
     }
 
     // hello client
-    struct HelloClient<'a> {
-        c: Client<'a>,
+    struct HelloClient {
+        c: Client2,
     }
 
-    impl HelloClient<'_> {
-        pub fn new<'a>(tr: &'a ClientTransport) -> HelloClient<'a> {
-            HelloClient { c: Client::new(tr) }
+    impl HelloClient {
+        pub async fn connect(addr: HSTRING) -> Result<HelloClient, Error> {
+            let c = Client2::connect(addr).await?;
+            Ok(HelloClient { c })
         }
 
         pub async fn say_hello(
@@ -231,42 +227,20 @@ mod hello_test {
             svr.serve_with_shutdown(12346, stoprx).await;
         });
 
-        let mut creds = FABRIC_SECURITY_CREDENTIALS::default();
-        creds.Kind = FABRIC_SECURITY_CREDENTIAL_KIND_NONE;
-        let mut settings = FABRIC_TRANSPORT_SETTINGS::default();
-        settings.KeepAliveTimeoutInSeconds = 10;
-        settings.MaxConcurrentCalls = 10;
-        settings.MaxMessageSize = 10;
-        settings.MaxQueueSize = 10;
-        settings.OperationTimeoutInSeconds = 10;
-        settings.SecurityCredentials = &creds;
-
-        let timoutmilliseconds = 100000;
         let connectionaddress = HSTRING::from("localhost:12346+/");
-        let mut client = ClientTransport::new(&settings, &connectionaddress).unwrap();
-        client.open(timoutmilliseconds).await.unwrap();
 
-        // This wait is optional in prod
-        client.connect().await;
+        let helloclient = HelloClient::connect(connectionaddress).await.unwrap();
 
-        // send request
-        let cc = HelloClient::new(&client);
+        // // send request
         let request = HelloRequest {
             name: String::from("myname"),
         };
-        let resp = cc.say_hello(1000, request).await.unwrap();
+        let resp = helloclient.say_hello(1000, request).await.unwrap();
 
         assert_eq!("Hello: myname", resp.message);
 
         // stop server
         stoptx.send(()).unwrap();
-
-        // this wait is optional in prod
-        let hr = client.disconnect().await;
-        assert_eq!(hr, HRESULT(FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END.0));
-
-        // close client
-        client.close(timoutmilliseconds).await.unwrap();
     }
 }
 
