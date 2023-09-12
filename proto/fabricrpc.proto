@@ -1,0 +1,19 @@
+// ------------------------------------------------------------
+// Copyright 2022 Youyuan Wu
+// Licensed under the MIT License (MIT). See License.txt in the repo root for license information.
+// ------------------------------------------------------------
+
+// copied from https://github.com/youyuanwu/fabric-rpc/blob/main/protos/fabricrpc.proto
+
+syntax = "proto3";
+
+package fabricrpc;
+
+message request_header {
+  string url = 1;
+}
+
+message reply_header {
+  int32 status_code = 1;
+  string status_message = 2;
+}
