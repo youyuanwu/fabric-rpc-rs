@@ -202,6 +202,9 @@ pub struct MessageViewer<'a> {
     body: &'a [u8],
 }
 
+unsafe impl Sync for MessageViewer<'_> {}
+unsafe impl Send for MessageViewer<'_> {}
+
 impl MessageViewer<'_> {
     pub fn new(msg: IFabricTransportMessage) -> MessageViewer<'static> {
         //MessageViewer{msg}

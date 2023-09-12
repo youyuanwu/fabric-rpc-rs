@@ -24,4 +24,4 @@ features = [
 
 [build-dependencies]
 tonic-build = "0.9"
-# protobuf-src = "1.1.0+21.5" // does not support windows.
+prost-build = "0.11"
