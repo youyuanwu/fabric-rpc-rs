@@ -1,0 +1,31 @@
+name: build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        BUILD_TYPE: ["Debug"]
+        os: [ windows-latest ]
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Get specific version CMake, v3.21.2
+      uses: lukka/get-cmake@v3.21.2
+
+    - name: Install rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: run cmake
+      run: > 
+        cmake . -B build
+
+    - name: rust build
+      run: cargo build
+    
+    - name: rust test
+      run: cargo test
