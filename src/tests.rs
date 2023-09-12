@@ -128,6 +128,149 @@ async fn fabric_transport() {
 }
 
 #[cfg(test)]
+mod hello_test {
+    use service_fabric_rs::{
+        FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS,
+        FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END, FABRIC_SECURITY_CREDENTIALS,
+        FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
+    };
+    use windows::core::{HRESULT, HSTRING};
+
+    use crate::{
+        client::Client,
+        client_tr::ClientTransport,
+        server::{encode_proto, parse_proto, Server, Service},
+    };
+
+    use super::test_grpc::hello_world::{HelloReply, HelloRequest};
+
+    // User needs to implement
+    #[tonic::async_trait]
+    trait HelloService: Send + Sync + 'static {
+        async fn say_hello(request: HelloRequest) -> Result<HelloReply, tonic::Status>;
+    }
+
+    struct HelloSvcImpl {}
+
+    #[tonic::async_trait]
+    impl HelloService for HelloSvcImpl {
+        async fn say_hello(request: HelloRequest) -> Result<HelloReply, tonic::Status> {
+            let name = request.name;
+            let mut msg_reply = String::from("Hello: ");
+            msg_reply.push_str(name.as_str());
+            let reply = HelloReply { message: msg_reply };
+            Ok(reply)
+        }
+    }
+
+    // this is auto generated
+    struct HelloServer<T: HelloService> {
+        _svc: T, // ???why not used
+    }
+
+    impl<T: HelloService> HelloServer<T> {
+        fn new(svc: T) -> HelloServer<T> {
+            HelloServer { _svc: svc }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl<T: HelloService> Service for HelloServer<T> {
+        fn name(&self) -> String {
+            return String::from("helloworld.Greeter");
+        }
+
+        #[must_use]
+        async fn handle_request(
+            &self,
+            url: String,
+            request: &[u8],
+        ) -> std::result::Result<Vec<u8>, tonic::Status> {
+            match url.as_str() {
+                "/helloworld.Greeter/SayHello" => {
+                    let req = parse_proto(request)?;
+                    let resp = T::say_hello(req).await?;
+                    return encode_proto(&resp);
+                }
+                _ => Err(tonic::Status::unimplemented("url not found")),
+            }
+        }
+    }
+
+    // hello client
+    struct HelloClient<'a> {
+        c: Client<'a>,
+    }
+
+    impl HelloClient<'_> {
+        pub fn new<'a>(tr: &'a ClientTransport) -> HelloClient<'a> {
+            HelloClient { c: Client::new(tr) }
+        }
+
+        pub async fn say_hello(
+            &self,
+            timoutmilliseconds: u32,
+            request: HelloRequest,
+        ) -> Result<HelloReply, tonic::Status> {
+            let url = String::from("/helloworld.Greeter/SayHello");
+            return self.c.request(url, &request, timoutmilliseconds).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fabricrpc_helloworld() {
+        let (stoptx, stoprx) = tokio::sync::oneshot::channel::<()>();
+
+        tokio::spawn(async move {
+            // make server run
+            let hello_svc = HelloSvcImpl {};
+            let hello_svr = HelloServer::new(hello_svc);
+
+            let mut svr = Server::default();
+            svr.add_service(hello_svr);
+            svr.serve_with_shutdown(12346, stoprx).await;
+        });
+
+        let mut creds = FABRIC_SECURITY_CREDENTIALS::default();
+        creds.Kind = FABRIC_SECURITY_CREDENTIAL_KIND_NONE;
+        let mut settings = FABRIC_TRANSPORT_SETTINGS::default();
+        settings.KeepAliveTimeoutInSeconds = 10;
+        settings.MaxConcurrentCalls = 10;
+        settings.MaxMessageSize = 10;
+        settings.MaxQueueSize = 10;
+        settings.OperationTimeoutInSeconds = 10;
+        settings.SecurityCredentials = &creds;
+
+        let timoutmilliseconds = 100000;
+        let connectionaddress = HSTRING::from("localhost:12346+/");
+        let mut client = ClientTransport::new(&settings, &connectionaddress).unwrap();
+        client.open(timoutmilliseconds).await.unwrap();
+
+        // This wait is optional in prod
+        client.connect().await;
+
+        // send request
+        let cc = HelloClient::new(&client);
+        let request = HelloRequest {
+            name: String::from("myname"),
+        };
+        let resp = cc.say_hello(1000, request).await.unwrap();
+
+        assert_eq!("Hello: myname", resp.message);
+
+        // stop server
+        stoptx.send(()).unwrap();
+
+        // this wait is optional in prod
+        let hr = client.disconnect().await;
+        assert_eq!(hr, HRESULT(FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END.0));
+
+        // close client
+        client.close(timoutmilliseconds).await.unwrap();
+    }
+}
+
+#[cfg(test)]
 mod test_grpc {
 
     use tokio::sync::oneshot;
