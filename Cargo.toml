@@ -27,7 +27,7 @@ tonic-build = "0.9"
 prost-build = "0.11"
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = { version = "0.5.1", features = ["async_tokio"] }
 
 [[bench]]
 name = "fabric_rpc_benchmark"
