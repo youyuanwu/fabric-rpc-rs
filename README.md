@@ -1,6 +1,7 @@
 # fabric-rpc-rs
+[![ci](https://github.com/youyuanwu/fabric-rpc-rs/actions/workflows/build.yml/badge.svg)](https://github.com/youyuanwu/fabric-rpc-rs/actions/workflows/build.yml)
+[![codecov](https://codecov.io/github/youyuanwu/fabric-rpc-rs/graph/badge.svg?token=F41OYJ2R82)](https://codecov.io/github/youyuanwu/fabric-rpc-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://raw.githubusercontent.com/youyuanwu/fabric-rpc-rs/main/LICENSE)
-[![GitHub Actions Demo](https://github.com/youyuanwu/fabric-rpc-rs/actions/workflows/build.yml/badge.svg)](https://github.com/youyuanwu/fabric-rpc-rs/actions/workflows/build.yml)
 
 RPC framework based on FabricTransport in Service Fabric. Rust support.
 See C++ counterpart in [fabric-rpc](https://github.com/youyuanwu/fabric-rpc).

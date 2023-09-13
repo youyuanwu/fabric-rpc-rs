@@ -33,3 +33,12 @@ criterion = { version = "0.5.1", features = ["async_tokio"] }
 name = "fabric_rpc_benchmark"
 path = "src/benches/fabric_rpc_benchmark.rs"
 harness = false
+# use local build crate for code gen
+[build-dependencies.fabric-rpc-build]
+path = "./fabric-rpc-build"
+
+
+[workspace]
+members = [
+    "fabric-rpc-build"
+]

@@ -9,3 +9,6 @@
 /Cargo.lock
 
 /build
+
+*.profraw
+lcov.info
