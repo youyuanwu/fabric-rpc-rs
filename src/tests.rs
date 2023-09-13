@@ -159,18 +159,19 @@ mod hello_test {
     }
 
     // this is auto generated
-    struct HelloServer<T: HelloService> {
+    // HelloServiceRouter is used for routing
+    struct HelloServiceRouter<T: HelloService> {
         _svc: T, // ???why not used
     }
 
-    impl<T: HelloService> HelloServer<T> {
-        fn new(svc: T) -> HelloServer<T> {
-            HelloServer { _svc: svc }
+    impl<T: HelloService> HelloServiceRouter<T> {
+        fn new(svc: T) -> HelloServiceRouter<T> {
+            HelloServiceRouter { _svc: svc }
         }
     }
 
     #[tonic::async_trait]
-    impl<T: HelloService> Service for HelloServer<T> {
+    impl<T: HelloService> Service for HelloServiceRouter<T> {
         fn name(&self) -> String {
             return String::from("helloworld.Greeter");
         }
@@ -220,10 +221,9 @@ mod hello_test {
         tokio::spawn(async move {
             // make server run
             let hello_svc = HelloSvcImpl {};
-            let hello_svr = HelloServer::new(hello_svc);
 
             let mut svr = Server::default();
-            svr.add_service(hello_svr);
+            svr.add_service(HelloServiceRouter::new(hello_svc));
             svr.serve_with_shutdown(12346, stoprx).await;
         });
 
@@ -309,5 +309,18 @@ mod test_grpc {
 
         println!("RESPONSE={:?}", response);
         tx.send(()).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod generator_test {
+    #[allow(non_snake_case)]
+    pub mod fabrichello {
+        tonic::include_proto!("fabrichello"); // The string specified here must match the proto package name
+    }
+
+    #[test]
+    fn mytest() {
+        let _ = fabrichello::MyClientTest {};
     }
 }
