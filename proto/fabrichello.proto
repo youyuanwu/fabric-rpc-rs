@@ -1,0 +1,21 @@
+// ------------------------------------------------------------
+// Copyright 2022 Youyuan Wu
+// Licensed under the MIT License (MIT). See License.txt in the repo root for
+// license information.
+// ------------------------------------------------------------
+
+syntax = "proto3";
+
+package fabrichello;
+
+service FabricHello {
+  rpc SayHello (FabricRequest) returns (FabricResponse) {}
+}
+
+message FabricRequest {
+  string fabricName = 1;
+}
+
+message FabricResponse {
+  string fabricMessage = 1;
+}

@@ -82,7 +82,7 @@ impl ServerInner {
                 Kind: FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
                 Value: std::ptr::null_mut(),
             };
-            let mut settings = FABRIC_TRANSPORT_SETTINGS {
+            let settings = FABRIC_TRANSPORT_SETTINGS {
                 OperationTimeoutInSeconds: 10,
                 KeepAliveTimeoutInSeconds: 10,
                 MaxMessageSize: 1024,
@@ -91,12 +91,6 @@ impl ServerInner {
                 SecurityCredentials: &creds,
                 Reserved: std::ptr::null_mut(),
             };
-            settings.KeepAliveTimeoutInSeconds = 10;
-            settings.MaxConcurrentCalls = 10;
-            settings.MaxMessageSize = 10;
-            settings.MaxQueueSize = 10;
-            settings.OperationTimeoutInSeconds = 10;
-            settings.SecurityCredentials = &creds;
 
             // create server
             let mut serveraddr = FABRIC_TRANSPORT_LISTEN_ADDRESS::default();

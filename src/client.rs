@@ -3,7 +3,12 @@
 use std::io::Cursor;
 
 use prost::Message;
+use service_fabric_rs::{
+    FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS, FABRIC_SECURITY_CREDENTIALS,
+    FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
+};
 use tonic::{Code, Status};
+use windows::core::{Error, HSTRING};
 
 use crate::{
     client_tr::ClientTransport,
@@ -12,13 +17,31 @@ use crate::{
 };
 
 // Client is a wrapper for the transport to implement rpc protocol
-pub struct Client<'a> {
-    tr: &'a ClientTransport,
+// TODO: support client close
+pub struct Client2 {
+    tr: ClientTransport,
 }
 
-impl Client<'_> {
-    pub fn new(tr: &ClientTransport) -> Client<'_> {
-        Client { tr }
+impl Client2 {
+    pub async fn connect(addr: HSTRING) -> Result<Client2, Error> {
+        let creds = FABRIC_SECURITY_CREDENTIALS {
+            Kind: FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
+            Value: std::ptr::null_mut(),
+        };
+        let settings = FABRIC_TRANSPORT_SETTINGS {
+            OperationTimeoutInSeconds: 10,
+            KeepAliveTimeoutInSeconds: 10,
+            MaxMessageSize: 1024,
+            MaxConcurrentCalls: 10,
+            MaxQueueSize: 10,
+            SecurityCredentials: &creds,
+            Reserved: std::ptr::null_mut(),
+        };
+        let mut tr = ClientTransport::new(&settings, &addr)?;
+        let timoutmilliseconds = 100000;
+        tr.open(timoutmilliseconds).await?;
+        tr.connect().await;
+        Ok(Client2 { tr })
     }
 
     // send the msg and returns the proto reply

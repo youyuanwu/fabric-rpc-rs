@@ -129,16 +129,11 @@ async fn fabric_transport() {
 
 #[cfg(test)]
 mod hello_test {
-    use service_fabric_rs::{
-        FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS,
-        FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END, FABRIC_SECURITY_CREDENTIALS,
-        FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
-    };
-    use windows::core::{HRESULT, HSTRING};
+
+    use windows::core::{Error, HSTRING};
 
     use crate::{
-        client::Client,
-        client_tr::ClientTransport,
+        client::Client2,
         server::{encode_proto, parse_proto, Server, Service},
     };
 
@@ -164,18 +159,19 @@ mod hello_test {
     }
 
     // this is auto generated
-    struct HelloServer<T: HelloService> {
+    // HelloServiceRouter is used for routing
+    struct HelloServiceRouter<T: HelloService> {
         _svc: T, // ???why not used
     }
 
-    impl<T: HelloService> HelloServer<T> {
-        fn new(svc: T) -> HelloServer<T> {
-            HelloServer { _svc: svc }
+    impl<T: HelloService> HelloServiceRouter<T> {
+        fn new(svc: T) -> HelloServiceRouter<T> {
+            HelloServiceRouter { _svc: svc }
         }
     }
 
     #[tonic::async_trait]
-    impl<T: HelloService> Service for HelloServer<T> {
+    impl<T: HelloService> Service for HelloServiceRouter<T> {
         fn name(&self) -> String {
             return String::from("helloworld.Greeter");
         }
@@ -198,13 +194,14 @@ mod hello_test {
     }
 
     // hello client
-    struct HelloClient<'a> {
-        c: Client<'a>,
+    struct HelloClient {
+        c: Client2,
     }
 
-    impl HelloClient<'_> {
-        pub fn new<'a>(tr: &'a ClientTransport) -> HelloClient<'a> {
-            HelloClient { c: Client::new(tr) }
+    impl HelloClient {
+        pub async fn connect(addr: HSTRING) -> Result<HelloClient, Error> {
+            let c = Client2::connect(addr).await?;
+            Ok(HelloClient { c })
         }
 
         pub async fn say_hello(
@@ -224,49 +221,26 @@ mod hello_test {
         tokio::spawn(async move {
             // make server run
             let hello_svc = HelloSvcImpl {};
-            let hello_svr = HelloServer::new(hello_svc);
 
             let mut svr = Server::default();
-            svr.add_service(hello_svr);
+            svr.add_service(HelloServiceRouter::new(hello_svc));
             svr.serve_with_shutdown(12346, stoprx).await;
         });
 
-        let mut creds = FABRIC_SECURITY_CREDENTIALS::default();
-        creds.Kind = FABRIC_SECURITY_CREDENTIAL_KIND_NONE;
-        let mut settings = FABRIC_TRANSPORT_SETTINGS::default();
-        settings.KeepAliveTimeoutInSeconds = 10;
-        settings.MaxConcurrentCalls = 10;
-        settings.MaxMessageSize = 10;
-        settings.MaxQueueSize = 10;
-        settings.OperationTimeoutInSeconds = 10;
-        settings.SecurityCredentials = &creds;
-
-        let timoutmilliseconds = 100000;
         let connectionaddress = HSTRING::from("localhost:12346+/");
-        let mut client = ClientTransport::new(&settings, &connectionaddress).unwrap();
-        client.open(timoutmilliseconds).await.unwrap();
 
-        // This wait is optional in prod
-        client.connect().await;
+        let helloclient = HelloClient::connect(connectionaddress).await.unwrap();
 
-        // send request
-        let cc = HelloClient::new(&client);
+        // // send request
         let request = HelloRequest {
             name: String::from("myname"),
         };
-        let resp = cc.say_hello(1000, request).await.unwrap();
+        let resp = helloclient.say_hello(1000, request).await.unwrap();
 
         assert_eq!("Hello: myname", resp.message);
 
         // stop server
         stoptx.send(()).unwrap();
-
-        // this wait is optional in prod
-        let hr = client.disconnect().await;
-        assert_eq!(hr, HRESULT(FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END.0));
-
-        // close client
-        client.close(timoutmilliseconds).await.unwrap();
     }
 }
 
@@ -335,5 +309,18 @@ mod test_grpc {
 
         println!("RESPONSE={:?}", response);
         tx.send(()).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod generator_test {
+    #[allow(non_snake_case)]
+    pub mod fabrichello {
+        tonic::include_proto!("fabrichello"); // The string specified here must match the proto package name
+    }
+
+    #[test]
+    fn mytest() {
+        let _ = fabrichello::MyClientTest {};
     }
 }
