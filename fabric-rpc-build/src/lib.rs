@@ -5,6 +5,7 @@ use prost_build::Config;
 
 mod client;
 mod code_gen;
+mod server;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

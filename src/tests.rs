@@ -311,16 +311,3 @@ mod test_grpc {
         tx.send(()).unwrap();
     }
 }
-
-#[cfg(test)]
-mod generator_test {
-    #[allow(non_snake_case)]
-    pub mod fabrichello {
-        tonic::include_proto!("fabrichello"); // The string specified here must match the proto package name
-    }
-
-    #[test]
-    fn mytest() {
-        let _ = fabrichello::MyClientTest {};
-    }
-}

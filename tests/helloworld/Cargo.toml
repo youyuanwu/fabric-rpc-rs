@@ -1,0 +1,26 @@
+[package]
+name = "helloworld"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tonic = "0.9"
+prost = "0.11"
+
+[dependencies.fabric-rpc-rs]
+path = "../../"
+
+[dependencies.windows]
+version = "0.43"
+features = [
+    "Win32_Foundation"
+]
+
+# use local build crate for code gen
+[build-dependencies.fabric-rpc-build]
+path = "../../fabric-rpc-build"
+
+
