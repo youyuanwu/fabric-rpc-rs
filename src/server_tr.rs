@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ffi::c_void, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use service_fabric_rs::{
     FabricCommon::{
@@ -30,18 +33,22 @@ use crate::{
 //#[derive(Debug)]
 #[implement(IFabricTransportConnectionHandler)]
 struct ServerConnHandler {
-    internal: *mut c_void, // need to use cvoid because there is no way to anotate lifetime for implements
+    internal: Arc<ServerInternal>, // need to use cvoid because there is no way to anotate lifetime for implements
 }
 
 impl ServerConnHandler {
-    pub fn new(internal: *mut c_void) -> ServerConnHandler {
+    pub fn new(internal: Arc<ServerInternal>) -> ServerConnHandler {
         ServerConnHandler { internal }
     }
 
+    // TODO: maybe fix this using refcell etc
     #[allow(clippy::mut_from_ref)]
-    fn get_internal(&self) -> &mut ServerInternal {
-        let cast = self.internal as *mut ServerInternal;
-        unsafe { &mut *cast }
+    fn get_internal_mut(&self) -> &mut ServerInternal {
+        // get a view of the Arc
+        // need unsafe since to work around Arc immutable view
+        let ptr: *const ServerInternal = std::ptr::addr_of!(*self.internal);
+        let ptr_mut = ptr as *mut ServerInternal;
+        unsafe { &mut *ptr_mut }
     }
 }
 
@@ -60,7 +67,7 @@ impl IFabricTransportConnectionHandler_Impl for ServerConnHandler {
         let cb = callback.clone().unwrap();
         // push the connection
         let client = clientconnection.clone().unwrap();
-        self.get_internal().push(client)?;
+        self.get_internal_mut().push(client)?;
 
         let mut ctx = Context::new(cb.clone());
         ctx.complete();
@@ -94,7 +101,7 @@ impl IFabricTransportConnectionHandler_Impl for ServerConnHandler {
         let cb = callback.clone().unwrap();
         let id = raw_to_hstring(clientid);
 
-        self.get_internal().disconnect(id);
+        self.get_internal_mut().disconnect(id);
 
         let mut ctx = Context::new(cb.clone());
         ctx.complete();
@@ -119,20 +126,21 @@ impl IFabricTransportConnectionHandler_Impl for ServerConnHandler {
 //#[derive(Debug)]
 #[implement(IFabricTransportMessageHandler)]
 struct MessageHandler {
-    internal: *const c_void,
+    internal: Arc<ServerInternal>,
 }
 
 impl MessageHandler {
     // internal is the ServerInternal
-    pub fn new(internal: *const c_void) -> MessageHandler {
+    pub fn new(internal: Arc<ServerInternal>) -> MessageHandler {
         MessageHandler { internal }
     }
 
     // this is to satisfy the com implements functions are immutable
     #[allow(clippy::mut_from_ref)]
-    fn get_internal(&self) -> &mut ServerInternal {
-        let cast = self.internal as *mut ServerInternal;
-        unsafe { &mut *cast }
+    fn get_internal_mut(&self) -> &mut ServerInternal {
+        let ptr: *const ServerInternal = std::ptr::addr_of!(*self.internal);
+        let ptr_mut = ptr as *mut ServerInternal;
+        unsafe { &mut *ptr_mut }
     }
 }
 
@@ -159,7 +167,7 @@ impl IFabricTransportMessageHandler_Impl for MessageHandler {
             msg,
             ctx: ctx.clone(),
         };
-        self.get_internal().push_requst(id, req)?;
+        self.get_internal_mut().push_requst(id, req)?;
 
         Ok(ctx.into())
     }
@@ -198,6 +206,12 @@ struct ServerInternal {
 
 unsafe impl Send for ServerInternal {}
 unsafe impl Sync for ServerInternal {}
+
+impl Default for ServerInternal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ServerInternal {
     pub fn new() -> ServerInternal {
@@ -238,10 +252,7 @@ impl ServerInternal {
         self.rx.recv().await.unwrap()
     }
 
-    // pub fn get_receiver(&self) -> &Receiver<Arc<Mutex<ServerConnection>>> {
-    //     &self.rx
-    // }
-
+    // disconnect one client
     pub fn disconnect(&mut self, id: HSTRING) {
         let val = self.conns.lock().unwrap().remove(&id.to_string());
         if let Some(mut vv) = val {
@@ -354,28 +365,32 @@ impl ServerConnectionInternal {
 // server
 pub struct ServerTransport {
     l: IFabricTransportListener,
-    internal: Box<ServerInternal>,
+    internal: Arc<ServerInternal>,
 }
 
 unsafe impl Send for ServerTransport {}
 unsafe impl Sync for ServerTransport {}
 
+// Note that ServerInternal object shared between ConnectionHandler
+// and MessageHandler are terribly unsafe.
+// We use a Arc to do refcount, but need to modify the contents of ServerInternal.
+// So the unsafe code need to obtain the mutable ref.
+// This difficulty is reached because ConnectionHandler and MessageHanlder needs to share
+// the ServerInternal object, and use async methods. If we use Arc<Mutex<>>, we need to
+// hold the mutex while doing await, which can cause more deadlocks.
+// So we share the mutable object use Arc and ServerInternal object itself is threadsafe.
 impl ServerTransport {
     pub fn new(
         settings: &FABRIC_TRANSPORT_SETTINGS,
         address: &FABRIC_TRANSPORT_LISTEN_ADDRESS,
     ) -> Result<ServerTransport, Error> {
-        // get the raw addr of the internal to be shared
-        let internal = Box::new(ServerInternal::new());
-        let raw_internal = &*internal as *const ServerInternal;
-        let raw_mut_internal = raw_internal as *mut ServerInternal;
-        let raw_void_internal = raw_mut_internal as *mut c_void;
+        let internal = Arc::new(ServerInternal::new());
 
         let disposeprocessor: IFabricTransportMessageDisposer = MsgDispoer::new().into();
         let svr_conn_handler: IFabricTransportConnectionHandler =
-            ServerConnHandler::new(raw_void_internal).into();
+            ServerConnHandler::new(internal.clone()).into();
         let msg_handler: IFabricTransportMessageHandler =
-            MessageHandler::new(raw_void_internal).into();
+            MessageHandler::new(internal.clone()).into();
         let listener = unsafe {
             CreateFabricTransportListener(
                 &IFabricTransportListener::IID,
@@ -423,6 +438,12 @@ impl ServerTransport {
     }
 
     pub async fn async_accept(&mut self) -> ServerConnection {
-        self.internal.async_pop().await
+        let internal_ref;
+        {
+            let ptr: *const ServerInternal = std::ptr::addr_of!(*self.internal);
+            let ptr_mut = ptr as *mut ServerInternal;
+            internal_ref = unsafe { &mut *ptr_mut };
+        }
+        internal_ref.async_pop().await
     }
 }
