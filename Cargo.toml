@@ -27,11 +27,12 @@ tonic-build = "0.9"
 prost-build = "0.11"
 
 # use local build crate for code gen
-[build-dependencies.fabric-rpc-build]
-path = "./fabric-rpc-build"
+# [build-dependencies.fabric-rpc-build]
+# path = "./fabric-rpc-build"
 
 
 [workspace]
 members = [
-    "fabric-rpc-build"
+    "fabric-rpc-build",
+    "tests/helloworld"
 ]
