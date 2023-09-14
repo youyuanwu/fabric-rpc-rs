@@ -2,111 +2,42 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use fabric_rpc_rs::{
     client_tr::ClientTransport,
-    server_tr::ServerTransport,
     sys::{Message, MessageViewer},
 };
 use service_fabric_rs::{
-    FabricCommon::FabricTransport::{FABRIC_TRANSPORT_LISTEN_ADDRESS, FABRIC_TRANSPORT_SETTINGS},
-    FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END, FABRIC_SECURITY_CREDENTIALS,
+    FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS, FABRIC_SECURITY_CREDENTIALS,
     FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
 };
-use windows::core::{HRESULT, HSTRING, PCWSTR};
 
+use tokio::runtime::Runtime;
+use windows::core::HSTRING;
 
-fn criterion_fabric_transport(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    c.bench_function("fabric_transport", move |b| {
-        b.to_async(&rt).iter(|| async move {
-            bench_fabric_transport().await;
-        })
-    });
-}
+async fn fabric_transport_client() {
+    const TIMEOUT_MILLIS: u32 = 100000;
 
-async fn bench_fabric_transport() {
-    let mut creds = FABRIC_SECURITY_CREDENTIALS::default();
-    creds.Kind = FABRIC_SECURITY_CREDENTIAL_KIND_NONE;
-    let mut settings = FABRIC_TRANSPORT_SETTINGS::default();
-    settings.KeepAliveTimeoutInSeconds = 10;
-    settings.MaxConcurrentCalls = 10;
-    settings.MaxMessageSize = 10;
-    settings.MaxQueueSize = 10;
-    settings.OperationTimeoutInSeconds = 10;
-    settings.SecurityCredentials = &creds;
+    let creds = FABRIC_SECURITY_CREDENTIALS {
+        Kind: FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
+        ..Default::default()
+    };
+    let settings = FABRIC_TRANSPORT_SETTINGS {
+        KeepAliveTimeoutInSeconds: 10,
+        MaxConcurrentCalls: 10,
+        MaxMessageSize: 10,
+        MaxQueueSize: 10,
+        OperationTimeoutInSeconds: 10,
+        SecurityCredentials: &creds,
+        ..Default::default()
+    };
 
-    // create server
-    let mut serveraddr = FABRIC_TRANSPORT_LISTEN_ADDRESS::default();
-    let host = HSTRING::from("localhost");
-    let path = HSTRING::from("/");
-    serveraddr.IPAddressOrFQDN = PCWSTR::from(&host);
-    serveraddr.Port = 12345;
-    serveraddr.Path = PCWSTR::from(&path);
-
-    let (stoptx, mut stoprx) = tokio::sync::oneshot::channel::<()>();
-
-    tokio::spawn(async move {
-        let mut listener: ServerTransport;
-        {
-            let mut creds = FABRIC_SECURITY_CREDENTIALS::default();
-            creds.Kind = FABRIC_SECURITY_CREDENTIAL_KIND_NONE;
-            let mut settings = FABRIC_TRANSPORT_SETTINGS::default();
-            settings.KeepAliveTimeoutInSeconds = 10;
-            settings.MaxConcurrentCalls = 10;
-            settings.MaxMessageSize = 10;
-            settings.MaxQueueSize = 10;
-            settings.OperationTimeoutInSeconds = 10;
-            settings.SecurityCredentials = &creds;
-
-            // create server
-            let mut serveraddr = FABRIC_TRANSPORT_LISTEN_ADDRESS::default();
-            let host = HSTRING::from("localhost");
-            let path = HSTRING::from("/");
-            serveraddr.IPAddressOrFQDN = PCWSTR::from(&host);
-            serveraddr.Port = 12345;
-            serveraddr.Path = PCWSTR::from(&path);
-            listener = ServerTransport::new(&settings, &serveraddr).unwrap();
-        }
-
-        let listen_addr = listener.open().await.unwrap();
-
-        let connectionaddress = HSTRING::from("localhost:12345+/");
-        assert_eq!(listen_addr, connectionaddress);
-
-        loop {
-            let mut conn;
-            tokio::select! {
-                _ = (&mut stoprx) => { break;},
-                x = listener.async_accept() => {
-                    conn = x;
-                }
-            }
-
-            tokio::spawn(async move {
-                let mut req = conn.async_accept().await;
-
-                let msg = req.get_request_msg();
-                let vw = MessageViewer::new(msg.clone());
-
-                let header = vw.get_header();
-                let body = vw.get_body();
-
-                let hello = String::from("hello: ").into_bytes();
-                let mut reply_header = hello.clone();
-                reply_header.extend(header);
-                let mut reply_body = hello;
-                reply_body.extend(body);
-
-                let reply = Message::create(reply_header, reply_body);
-                req.complete(reply);
-            });
-        }
-        //tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-        listener.close().await.unwrap();
-    });
-
-    let timoutmilliseconds = 100000;
     let connectionaddress = HSTRING::from("localhost:12345+/");
     let mut client = ClientTransport::new(&settings, &connectionaddress).unwrap();
-    client.open(timoutmilliseconds).await.unwrap();
+    match client.open(TIMEOUT_MILLIS).await {
+        Err(e) => {
+            eprintln!("Client unable to connect: {:?}", e);
+            return;
+        }
+        _ => {}
+    }
 
     // This wait is optional in prod
     client.connect().await;
@@ -116,7 +47,7 @@ async fn bench_fabric_transport() {
         let header = String::from("myheader");
         let body = String::from("mybody");
         let msg = Message::create(header.clone().into_bytes(), body.clone().into_bytes());
-        let reply = client.request(timoutmilliseconds, &msg).await.unwrap();
+        let reply = client.request(TIMEOUT_MILLIS, &msg).await.unwrap();
         let replyvw = MessageViewer::new(reply);
 
         let header_ret = replyvw.get_header();
@@ -126,15 +57,17 @@ async fn bench_fabric_transport() {
         assert_eq!(body_ret, String::from("hello: mybody").as_bytes());
     }
 
-    // stop server
-    stoptx.send(()).unwrap();
-
-    // this wait is optional in prod
-    let hr = client.disconnect().await;
-    assert_eq!(hr, HRESULT(FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END.0));
-
     // close client
-    client.close(timoutmilliseconds).await.unwrap();
+    client.close(TIMEOUT_MILLIS).await.unwrap();
+}
+
+fn criterion_fabric_transport(c: &mut Criterion) {
+    let rt = Runtime::new().unwrap();
+    c.bench_function("fabric_transport_client", move |b| {
+        b.to_async(&rt).iter(|| async move {
+            fabric_transport_client().await;
+        });
+    });
 }
 
 criterion_group!(benches, criterion_fabric_transport);
