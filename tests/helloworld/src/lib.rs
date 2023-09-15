@@ -43,7 +43,11 @@ mod generator_test {
             svr.add_service(fabric_hello_server::FabricHelloServiceRouter::new(
                 hello_svc,
             ));
-            svr.serve_with_shutdown(12347, stoprx).await;
+            svr.serve_with_shutdown(12347, async {
+                stoprx.await.ok();
+                println!("Graceful shutdown complete")
+            })
+            .await;
         });
 
         let connectionaddress = HSTRING::from("localhost:12347+/");

@@ -224,7 +224,11 @@ mod hello_test {
 
             let mut svr = Server::default();
             svr.add_service(HelloServiceRouter::new(hello_svc));
-            svr.serve_with_shutdown(12346, stoprx).await;
+            svr.serve_with_shutdown(12346, async {
+                stoprx.await.ok();
+                println!("Graceful shutdown complete")
+            })
+            .await;
         });
 
         let connectionaddress = HSTRING::from("localhost:12346+/");
