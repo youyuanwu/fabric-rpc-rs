@@ -41,11 +41,12 @@ bench = false
 path = "src/benches/fabric_server.rs"
 
 # use local build crate for code gen
-[build-dependencies.fabric-rpc-build]
-path = "./fabric-rpc-build"
+# [build-dependencies.fabric-rpc-build]
+# path = "./fabric-rpc-build"
 
 
 [workspace]
 members = [
-    "fabric-rpc-build"
+    "fabric-rpc-build",
+    "tests/helloworld"
 ]

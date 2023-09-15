@@ -5,10 +5,7 @@ use prost_build::Config;
 
 mod client;
 mod code_gen;
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+mod server;
 
 // code gen builder
 pub struct Builder {}
@@ -49,15 +46,4 @@ pub fn compile_protos(proto: impl AsRef<Path>) -> io::Result<()> {
     self::configure().compile(&[proto_path], &[proto_dir])?;
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
 }
