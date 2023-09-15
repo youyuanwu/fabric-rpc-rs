@@ -1,13 +1,12 @@
 // server
 
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use prost::Message;
 use service_fabric_rs::{
     FabricCommon::FabricTransport::{FABRIC_TRANSPORT_LISTEN_ADDRESS, FABRIC_TRANSPORT_SETTINGS},
     FABRIC_SECURITY_CREDENTIALS, FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
 };
-use tokio::sync::oneshot::Receiver;
 use tonic::async_trait;
 use windows::core::{HSTRING, PCWSTR};
 
@@ -35,11 +34,11 @@ impl Server {
         self.svcs.push(Box::new(svc));
     }
 
-    pub async fn serve_with_shutdown(self, port: u32, stoprx: Receiver<()>) {
+    pub async fn serve_with_shutdown<F: Future<Output = ()>>(self, port: u32, signal: F) {
         let mut inner = ServerInner {
             svcs: Arc::new(self.svcs),
         };
-        inner.serve_with_shutdown(port, stoprx).await
+        inner.serve_with_shutdown(port, signal).await
     }
 }
 
@@ -75,7 +74,10 @@ impl ServerInner {
         Err(tonic::Status::unimplemented("url not found"))
     }
 
-    async fn serve_with_shutdown(&mut self, port: u32, mut stoprx: Receiver<()>) {
+    async fn serve_with_shutdown<F>(&mut self, port: u32, signal: F)
+    where
+        F: Future<Output = ()>,
+    {
         let mut listener: ServerTransport;
         {
             let creds = FABRIC_SECURITY_CREDENTIALS {
@@ -107,10 +109,11 @@ impl ServerInner {
         //let connectionaddress = HSTRING::from("localhost:12345+/");
         // assert_eq!(listen_addr, connectionaddress);
 
+        let mut p = Box::pin(signal);
         loop {
             let mut conn;
             tokio::select! {
-                _ = (&mut stoprx) => { break;},
+                _ = (&mut p) => { break;},
                 x = listener.async_accept() => {
                     conn = x;
                 }
