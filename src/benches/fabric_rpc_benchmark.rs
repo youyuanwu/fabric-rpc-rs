@@ -1,73 +1,88 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use fabric_rpc_rs::{
-    client_tr::ClientTransport,
-    sys::{Message, MessageViewer},
-};
-use service_fabric_rs::{
-    FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS, FABRIC_SECURITY_CREDENTIALS,
-    FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
-};
+use fabric_rpc_rs::server::Server;
 
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, sync::oneshot::Receiver};
 use windows::core::HSTRING;
 
-async fn fabric_transport_client() {
-    const TIMEOUT_MILLIS: u32 = 100000;
+#[allow(non_snake_case)]
+pub mod gen {
+    tonic::include_proto!("fabrichello"); // The string specified here must match the proto package name
+}
 
-    let creds = FABRIC_SECURITY_CREDENTIALS {
-        Kind: FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
-        ..Default::default()
-    };
-    let settings = FABRIC_TRANSPORT_SETTINGS {
-        KeepAliveTimeoutInSeconds: 10,
-        MaxConcurrentCalls: 10,
-        MaxMessageSize: 10,
-        MaxQueueSize: 10,
-        OperationTimeoutInSeconds: 10,
-        SecurityCredentials: &creds,
-        ..Default::default()
-    };
+pub struct HelloSvcImpl {}
 
-    let connectionaddress = HSTRING::from("localhost:12345+/");
-    let mut client = ClientTransport::new(&settings, &connectionaddress).unwrap();
-    match client.open(TIMEOUT_MILLIS).await {
-        Err(e) => {
-            eprintln!("Client unable to connect: {:?}", e);
-            return;
-        }
-        _ => {}
+#[tonic::async_trait]
+impl gen::fabric_hello_server::FabricHelloService for HelloSvcImpl {
+    async fn say_hello(
+        &self,
+        request: gen::FabricRequest,
+    ) -> Result<gen::FabricResponse, tonic::Status> {
+        let name = request.fabric_name;
+        let mut msg_reply = String::from("Hello: ");
+        msg_reply.push_str(name.as_str());
+        let reply = gen::FabricResponse {
+            fabric_message: msg_reply,
+        };
+        Ok(reply)
     }
+}
 
-    // This wait is optional in prod
-    client.connect().await;
+fn run_server(stoprx: Receiver<()>) {
+    tokio::spawn(async move {
+        // make server run
+        let hello_svc = HelloSvcImpl {};
 
-    // send request
-    {
-        let header = String::from("myheader");
-        let body = String::from("mybody");
-        let msg = Message::create(header.clone().into_bytes(), body.clone().into_bytes());
-        let reply = client.request(TIMEOUT_MILLIS, &msg).await.unwrap();
-        let replyvw = MessageViewer::new(reply);
+        let mut svr = Server::default();
+        svr.add_service(gen::fabric_hello_server::FabricHelloServiceRouter::new(
+            hello_svc,
+        ));
+        svr.serve_with_shutdown(12345, async {
+            stoprx.await.ok();
+            println!("Graceful shutdown complete")
+        })
+        .await;
+    });
+}
 
-        let header_ret = replyvw.get_header();
-        assert_eq!(header_ret, String::from("hello: myheader").as_bytes());
+async fn make_request(c: &gen::fabric_hello_client::FabricHelloClient) {
+    let request = gen::FabricRequest {
+        fabric_name: String::from("myname"),
+    };
+    let resp = c.say_hello(10000, request).await.unwrap();
 
-        let body_ret = replyvw.get_body();
-        assert_eq!(body_ret, String::from("hello: mybody").as_bytes());
-    }
-
-    // close client
-    client.close(TIMEOUT_MILLIS).await.unwrap();
+    assert_eq!("Hello: myname", resp.fabric_message);
 }
 
 fn criterion_fabric_transport(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    c.bench_function("fabric_transport_client", move |b| {
-        b.to_async(&rt).iter(|| async move {
-            fabric_transport_client().await;
-        });
+    let (stoptx, stoprx) = tokio::sync::oneshot::channel::<()>();
+    // run server
+    rt.spawn(async move {
+        run_server(stoprx);
     });
+    // create client sync
+    let client = rt.block_on(async {
+        let connectionaddress = HSTRING::from("localhost:12345+/");
+        gen::fabric_hello_client::FabricHelloClient::connect(connectionaddress)
+            .await
+            .unwrap()
+    });
+
+    for _ in 1..3 {
+        // TODO: spawning does not work.
+        rt.block_on(async {
+            make_request(&client).await;
+        });
+    }
+    // c.bench_function("fabric_transport_client", move |b| {
+    //     let client_ref = &client;
+    //     b.to_async(&rt).iter(|| async move {
+    //         make_request(client_ref).await;
+    //         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    //     });
+    // });
+    stoptx.send(()).unwrap();
 }
 
 criterion_group!(benches, criterion_fabric_transport);

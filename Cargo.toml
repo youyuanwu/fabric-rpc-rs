@@ -41,8 +41,9 @@ bench = false
 path = "src/benches/fabric_server.rs"
 
 # use local build crate for code gen
-# [build-dependencies.fabric-rpc-build]
-# path = "./fabric-rpc-build"
+# needed for benchmark
+[build-dependencies.fabric-rpc-build]
+path = "./fabric-rpc-build"
 
 
 [workspace]

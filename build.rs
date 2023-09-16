@@ -6,5 +6,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // generate fabric-rpc header
     prost_build::compile_protos(&["proto/fabricrpc.proto"], &["proto/"])?;
 
+    // generate fabrichello for benchmark
+    fabric_rpc_build::compile_protos("proto/fabrichello.proto")?;
+
     Ok(())
 }

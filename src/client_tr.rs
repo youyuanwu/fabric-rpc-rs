@@ -94,6 +94,9 @@ pub struct ClientTransport {
     disconn_rx: Option<Receiver<HRESULT>>,
 }
 
+unsafe impl Send for ClientTransport {}
+unsafe impl Sync for ClientTransport {}
+
 impl ClientTransport {
     pub fn new(
         settings: &FABRIC_TRANSPORT_SETTINGS,
