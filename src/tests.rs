@@ -71,22 +71,28 @@ async fn fabric_transport() {
             }
 
             tokio::spawn(async move {
-                let mut req = conn.async_accept().await;
+                loop {
+                    let req = conn.async_accept().await;
+                    if req.is_none() {
+                        break;
+                    }
+                    let mut req = req.unwrap();
 
-                let msg = req.get_request_msg();
-                let vw = MessageViewer::new(msg.clone());
+                    let msg = req.get_request_msg();
+                    let vw = MessageViewer::new(msg.clone());
 
-                let header = vw.get_header();
-                let body = vw.get_body();
+                    let header = vw.get_header();
+                    let body = vw.get_body();
 
-                let hello = String::from("hello: ").into_bytes();
-                let mut reply_header = hello.clone();
-                reply_header.extend(header);
-                let mut reply_body = hello;
-                reply_body.extend(body);
+                    let hello = String::from("hello: ").into_bytes();
+                    let mut reply_header = hello.clone();
+                    reply_header.extend(header);
+                    let mut reply_body = hello;
+                    reply_body.extend(body);
 
-                let reply = Message::create(reply_header, reply_body);
-                req.complete(reply);
+                    let reply = Message::create(reply_header, reply_body);
+                    req.complete(reply);
+                }
             });
         }
         //tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -102,6 +108,21 @@ async fn fabric_transport() {
     client.connect().await;
 
     // send request
+    {
+        let header = String::from("myheader");
+        let body = String::from("mybody");
+        let msg = Message::create(header.clone().into_bytes(), body.clone().into_bytes());
+        let reply = client.request(timoutmilliseconds, &msg).await.unwrap();
+        let replyvw = MessageViewer::new(reply);
+
+        let header_ret = replyvw.get_header();
+        assert_eq!(header_ret, String::from("hello: myheader").as_bytes());
+
+        let body_ret = replyvw.get_body();
+        assert_eq!(body_ret, String::from("hello: mybody").as_bytes());
+    }
+
+    // send request 2
     {
         let header = String::from("myheader");
         let body = String::from("mybody");
@@ -142,14 +163,14 @@ mod hello_test {
     // User needs to implement
     #[tonic::async_trait]
     trait HelloService: Send + Sync + 'static {
-        async fn say_hello(request: HelloRequest) -> Result<HelloReply, tonic::Status>;
+        async fn say_hello(&self, request: HelloRequest) -> Result<HelloReply, tonic::Status>;
     }
 
     struct HelloSvcImpl {}
 
     #[tonic::async_trait]
     impl HelloService for HelloSvcImpl {
-        async fn say_hello(request: HelloRequest) -> Result<HelloReply, tonic::Status> {
+        async fn say_hello(&self, request: HelloRequest) -> Result<HelloReply, tonic::Status> {
             let name = request.name;
             let mut msg_reply = String::from("Hello: ");
             msg_reply.push_str(name.as_str());
@@ -161,12 +182,12 @@ mod hello_test {
     // this is auto generated
     // HelloServiceRouter is used for routing
     struct HelloServiceRouter<T: HelloService> {
-        _svc: T, // ???why not used
+        svc: T,
     }
 
     impl<T: HelloService> HelloServiceRouter<T> {
         fn new(svc: T) -> HelloServiceRouter<T> {
-            HelloServiceRouter { _svc: svc }
+            HelloServiceRouter { svc }
         }
     }
 
@@ -185,7 +206,7 @@ mod hello_test {
             match url.as_str() {
                 "/helloworld.Greeter/SayHello" => {
                     let req = parse_proto(request)?;
-                    let resp = T::say_hello(req).await?;
+                    let resp = self.svc.say_hello(req).await?;
                     return encode_proto(&resp);
                 }
                 _ => Err(tonic::Status::unimplemented("url not found")),

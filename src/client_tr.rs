@@ -79,6 +79,7 @@ impl IFabricTransportClientEventHandler_Impl for ClientEvHandler {
         let tx = self.disconn_tx.take();
         if let Some(txx) = tx {
             txx.send(error).unwrap();
+            println!("Client event disconnected");
         } else {
             panic!("Disconnect can only happen once")
         }

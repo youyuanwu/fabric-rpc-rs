@@ -153,6 +153,7 @@ impl IFabricTransportMessageHandler_Impl for MessageHandler {
         _timeoutmilliseconds: u32,
         callback: &::core::option::Option<IFabricAsyncOperationCallback>,
     ) -> ::windows::core::Result<IFabricAsyncOperationContext> {
+        // println!("Server Transport begin process request");
         if message.is_none() || callback.is_none() {
             return Err(E_POINTER.into());
         }
@@ -167,7 +168,9 @@ impl IFabricTransportMessageHandler_Impl for MessageHandler {
             msg,
             ctx: ctx.clone(),
         };
-        self.get_internal_mut().push_requst(id, req)?;
+        self.get_internal_mut()
+            .push_requst(id, req)
+            .expect("push request failed");
 
         Ok(ctx.into())
     }
@@ -176,6 +179,7 @@ impl IFabricTransportMessageHandler_Impl for MessageHandler {
         &self,
         context: &::core::option::Option<IFabricAsyncOperationContext>,
     ) -> ::windows::core::Result<IFabricTransportMessage> {
+        //println!("Server Transport end process request");
         if context.is_none() {
             return Err(E_POINTER.into());
         }
@@ -264,6 +268,7 @@ impl ServerInternal {
 
     // push a msg to a connection
     pub fn push_requst(&mut self, id: HSTRING, req: ServerRequest) -> Result<(), Error> {
+        // println!("Pushing request {}", id);
         let cc = self.conns.lock().unwrap();
         let val = cc.get(&id.to_string());
         if let Some(vv) = val {
@@ -325,9 +330,10 @@ impl ServerConnection {
         }
     }
 
-    pub async fn async_accept(&mut self) -> ServerRequest {
+    pub async fn async_accept(&mut self) -> Option<ServerRequest> {
         // if rx is not closed there is always item to pop
-        self.rx.recv().await.unwrap()
+        // if returned request is none, it means that the connection is dropped
+        self.rx.recv().await
     }
 }
 
@@ -348,7 +354,8 @@ impl ServerConnectionInternal {
 
     // transport can sync push into the queue
     pub fn push(&self, req: ServerRequest) -> Result<(), Error> {
-        let res = self.tx.blocking_send(req);
+        let res = self.tx.blocking_send(req); // channel is closed???
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
         if res.is_ok() {
             Ok(())
         } else {

@@ -53,22 +53,28 @@ async fn start_transport_server() {
             }
         }
         tokio::spawn(async move {
-            let mut req = conn.async_accept().await;
+            loop {
+                let req = conn.async_accept().await;
+                if req.is_none() {
+                    break;
+                }
+                let mut req = req.unwrap();
 
-            let msg = req.get_request_msg();
-            let vw = MessageViewer::new(msg.clone());
+                let msg = req.get_request_msg();
+                let vw = MessageViewer::new(msg.clone());
 
-            let header = vw.get_header();
-            let body = vw.get_body();
+                let header = vw.get_header();
+                let body = vw.get_body();
 
-            let hello = String::from("hello: ").into_bytes();
-            let mut reply_header = hello.clone();
-            reply_header.extend(header);
-            let mut reply_body = hello;
-            reply_body.extend(body);
+                let hello = String::from("hello: ").into_bytes();
+                let mut reply_header = hello.clone();
+                reply_header.extend(header);
+                let mut reply_body = hello;
+                reply_body.extend(body);
 
-            let reply = Message::create(reply_header, reply_body);
-            req.complete(reply);
+                let reply = Message::create(reply_header, reply_body);
+                req.complete(reply);
+            }
         })
         .await
         .unwrap();

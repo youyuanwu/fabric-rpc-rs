@@ -1,0 +1,44 @@
+// ------------------------------------------------------------
+// Copyright 2022 Youyuan Wu
+// Licensed under the MIT License (MIT). See License.txt in the repo root for
+// license information.
+// ------------------------------------------------------------
+
+syntax = "proto3";
+
+package todolist;
+
+service Todo {
+    rpc Find (FindRequest) returns (FindResponse) {}
+    rpc AddOne(AddOneRequest) returns (AddOneResponse) {}
+    rpc DeleteOne(DeleteOneRequest) returns (DeleteOneResponse) {}
+}
+
+message FindRequest {
+}
+
+message FindResponse {
+    repeated Item items = 1;
+}
+
+message AddOneRequest{
+    Item payload = 1;
+}
+
+message AddOneResponse {
+    Item payload = 1;
+}
+
+message DeleteOneRequest {
+    int32 id = 1;
+}
+
+message DeleteOneResponse {
+    Item payload = 1;
+}
+
+message Item {
+    int32 id = 1;
+    string description = 2;
+    bool completed = 3;
+}

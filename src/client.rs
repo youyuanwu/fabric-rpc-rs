@@ -62,7 +62,12 @@ impl Client2 {
         let msg = crate::sys::Message::create(headerbuf, bodybuf);
         let reply = self.tr.request(timoutmilliseconds, &msg).await;
         if reply.is_err() {
-            return Err(Status::internal(reply.unwrap_err().message().to_string()));
+            let e = reply.unwrap_err();
+            return Err(Status::internal(format!(
+                "client transport failed code: {} message:{}",
+                e.code(),
+                e.message()
+            )));
         }
 
         let reply = reply.unwrap();

@@ -118,45 +118,55 @@ impl ServerInner {
                     conn = x;
                 }
             }
+            //println!("Server got connection");
 
             let mut inner_clone = ServerInner {
                 svcs: self.svcs.clone(),
             };
 
             tokio::spawn(async move {
-                let mut req = conn.async_accept().await;
-
-                let vw;
-                {
-                    let msg = req.get_request_msg();
-                    vw = MessageViewer::new(msg.clone());
-                }
-                // let header = vw.get_header();
-                // let body = vw.get_body();
-
-                let payload = inner_clone.execute(vw).await;
-
-                let mut replyheader = ReplyHeader::default();
-                let mut replybody = Vec::new();
-                match payload {
-                    Err(st) => {
-                        replyheader.status_code = st.code() as i32;
-                        replyheader.status_message = String::from(st.message());
+                // loop until the request from this server is drained.
+                loop {
+                    let req = conn.async_accept().await;
+                    if req.is_none() {
+                        break;
                     }
-                    Ok(content) => {
-                        replyheader.status_code = tonic::Code::Ok as i32;
-                        replyheader.status_message = String::from("Ok");
-                        replybody = content;
+                    let mut req = req.unwrap();
+                    //println!("Server got request");
+
+                    let vw;
+                    {
+                        let msg = req.get_request_msg();
+                        vw = MessageViewer::new(msg.clone());
                     }
+                    // let header = vw.get_header();
+                    // let body = vw.get_body();
+
+                    let payload = inner_clone.execute(vw).await;
+
+                    let mut replyheader = ReplyHeader::default();
+                    let mut replybody = Vec::new();
+                    match payload {
+                        Err(st) => {
+                            replyheader.status_code = st.code() as i32;
+                            replyheader.status_message = String::from(st.message());
+                        }
+                        Ok(content) => {
+                            replyheader.status_code = tonic::Code::Ok as i32;
+                            replyheader.status_message = String::from("Ok");
+                            replybody = content;
+                        }
+                    }
+
+                    let header_buff = encode_proto(&replyheader).unwrap();
+
+                    let reply = crate::sys::Message::create(header_buff, replybody);
+                    req.complete(reply);
                 }
-
-                let header_buff = encode_proto(&replyheader).unwrap();
-
-                let reply = crate::sys::Message::create(header_buff, replybody);
-                req.complete(reply);
             });
         }
         //tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        //println!("Server shutdown");
         listener.close().await.unwrap();
     }
 }

@@ -18,6 +18,8 @@ pub fn generate_internal(service: &prost_build::Service) -> TokenStream {
       pub mod #server_mod{
         use fabric_rpc_rs::server::{encode_proto, parse_proto, Service};
 
+        // TODO: attr not work with quote
+        //#![allow(unused_variables, dead_code, missing_docs)]
         // User needs to implement
         #[tonic::async_trait]
         pub trait #service_ident: Send + Sync + 'static {
@@ -26,12 +28,12 @@ pub fn generate_internal(service: &prost_build::Service) -> TokenStream {
 
         // Router used for routing
         pub struct #service_router_ident<T: #service_ident> {
-            _svc: T,
+            svc: T,
         }
 
         impl<T: #service_ident> #service_router_ident<T> {
           pub fn new(svc: T) -> #service_router_ident<T> {
-            #service_router_ident { _svc: svc }
+            #service_router_ident { svc }
           }
       }
 
@@ -69,7 +71,7 @@ fn generate_service_trait_methods(service: &prost_build::Service) -> TokenStream
         let request_type = format_ident!("{}", method.input_type);
         let response_type = format_ident!("{}", method.output_type);
         let method_desc = quote! {
-          async fn #ident(request: super::#request_type) -> Result<super::#response_type, tonic::Status>;
+          async fn #ident(&self, request: super::#request_type) -> Result<super::#response_type, tonic::Status>;
         };
         stream.extend(method_desc);
     }
@@ -88,7 +90,7 @@ fn generate_routing_branches(service: &prost_build::Service) -> TokenStream {
         let routing_branch = quote! {
           #url => {
             let req = parse_proto(request)?;
-            let resp = T::#ident(req).await?;
+            let resp = self.svc.#ident(req).await?;
             return encode_proto(&resp);
         }
         };
