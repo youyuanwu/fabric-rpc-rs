@@ -1,12 +1,12 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
+use fabric_base::{
+    FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS, FABRIC_SECURITY_CREDENTIALS,
+    FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
+};
 use fabric_rpc_rs::{
     client_tr::ClientTransport,
     sys::{Message, MessageViewer},
-};
-use service_fabric_rs::{
-    FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS, FABRIC_SECURITY_CREDENTIALS,
-    FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
 };
 
 use tokio::runtime::Runtime;

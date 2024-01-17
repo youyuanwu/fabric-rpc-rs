@@ -2,14 +2,14 @@
 
 use std::cell::RefCell;
 
-use service_fabric_rs::FabricCommon::FabricTransport::{
+use fabric_base::FabricCommon::FabricTransport::{
     CreateFabricTransportClient, IFabricTransportCallbackMessageHandler,
     IFabricTransportCallbackMessageHandler_Impl, IFabricTransportClient,
     IFabricTransportClientEventHandler, IFabricTransportClientEventHandler_Impl,
     IFabricTransportMessage, IFabricTransportMessageDisposer, FABRIC_TRANSPORT_SETTINGS,
 };
 use tokio::sync::oneshot::{self, Receiver, Sender};
-use windows::core::{implement, Error, Interface, HRESULT, HSTRING};
+use windows::core::{implement, ComInterface, Error, HRESULT, HSTRING};
 
 use crate::{shared_tr::MsgDispoer, sys::AwaitableCallback};
 
@@ -34,7 +34,7 @@ impl Default for ClientMsgHandler {
 impl IFabricTransportCallbackMessageHandler_Impl for ClientMsgHandler {
     fn HandleOneWay(
         &self,
-        _message: &::core::option::Option<IFabricTransportMessage>,
+        _message: ::core::option::Option<&IFabricTransportMessage>,
     ) -> ::windows::core::Result<()> {
         Ok(())
     }

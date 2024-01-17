@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use service_fabric_rs::{
+use fabric_base::{
     FabricCommon::{
         FabricTransport::{
             CreateFabricTransportListener, IFabricTransportClientConnection,
@@ -20,7 +20,7 @@ use service_fabric_rs::{
 use tokio::sync::mpsc::{self, Receiver, Sender};
 //use tokio::sync::Mutex;
 use windows::{
-    core::{implement, Error, Interface, HRESULT, HSTRING},
+    core::{implement, ComInterface, Error, HRESULT, HSTRING},
     Win32::Foundation::E_POINTER,
 };
 
@@ -56,28 +56,28 @@ impl ServerConnHandler {
 impl IFabricTransportConnectionHandler_Impl for ServerConnHandler {
     fn BeginProcessConnect(
         &self,
-        clientconnection: &::core::option::Option<IFabricTransportClientConnection>,
+        clientconnection: ::core::option::Option<&IFabricTransportClientConnection>,
         _timeoutmilliseconds: u32,
-        callback: &::core::option::Option<IFabricAsyncOperationCallback>,
+        callback: ::core::option::Option<&IFabricAsyncOperationCallback>,
     ) -> ::windows::core::Result<IFabricAsyncOperationContext> {
         if callback.is_none() || clientconnection.is_none() {
             return Err(E_POINTER.into());
         }
 
-        let cb = callback.clone().unwrap();
+        let cb = callback.unwrap();
         // push the connection
-        let client = clientconnection.clone().unwrap();
-        self.get_internal_mut().push(client)?;
+        let client = clientconnection.unwrap();
+        self.get_internal_mut().push(client.clone())?;
 
         let mut ctx = Context::new(cb.clone());
         ctx.complete();
-        unsafe { cb.Invoke(&ctx.clone().into()) };
+        unsafe { cb.Invoke(&Into::<IFabricAsyncOperationContext>::into(ctx.clone())) };
         Ok(ctx.into())
     }
 
     fn EndProcessConnect(
         &self,
-        context: &::core::option::Option<IFabricAsyncOperationContext>,
+        context: ::core::option::Option<&IFabricAsyncOperationContext>,
     ) -> ::windows::core::Result<()> {
         if let Some(ctx) = context {
             let cast = Context::from_interface(ctx);
@@ -92,26 +92,26 @@ impl IFabricTransportConnectionHandler_Impl for ServerConnHandler {
         &self,
         clientid: *const u16,
         _timeoutmilliseconds: u32,
-        callback: &::core::option::Option<IFabricAsyncOperationCallback>,
+        callback: ::core::option::Option<&IFabricAsyncOperationCallback>,
     ) -> ::windows::core::Result<IFabricAsyncOperationContext> {
         if callback.is_none() {
             return Err(E_POINTER.into());
         }
 
-        let cb = callback.clone().unwrap();
+        let cb = callback.unwrap();
         let id = raw_to_hstring(clientid);
 
         self.get_internal_mut().disconnect(id);
 
         let mut ctx = Context::new(cb.clone());
         ctx.complete();
-        unsafe { cb.Invoke(&ctx.clone().into()) };
+        unsafe { cb.Invoke(&Into::<IFabricAsyncOperationContext>::into(ctx.clone())) };
         Ok(ctx.into())
     }
 
     fn EndProcessDisconnect(
         &self,
-        context: &::core::option::Option<IFabricAsyncOperationContext>,
+        context: ::core::option::Option<&IFabricAsyncOperationContext>,
     ) -> ::windows::core::Result<()> {
         if let Some(ctx) = context {
             let cast = Context::from_interface(ctx);
@@ -149,23 +149,23 @@ impl IFabricTransportMessageHandler_Impl for MessageHandler {
     fn BeginProcessRequest(
         &self,
         clientid: *const u16,
-        message: &::core::option::Option<IFabricTransportMessage>,
+        message: ::core::option::Option<&IFabricTransportMessage>,
         _timeoutmilliseconds: u32,
-        callback: &::core::option::Option<IFabricAsyncOperationCallback>,
+        callback: ::core::option::Option<&IFabricAsyncOperationCallback>,
     ) -> ::windows::core::Result<IFabricAsyncOperationContext> {
         // println!("Server Transport begin process request");
         if message.is_none() || callback.is_none() {
             return Err(E_POINTER.into());
         }
 
-        let msg = message.clone().unwrap();
-        let cb = callback.clone().unwrap();
+        let msg = message.unwrap();
+        let cb = callback.unwrap();
 
-        let ctx = Context::new(cb);
+        let ctx = Context::new(cb.clone());
 
         let id = raw_to_hstring(clientid);
         let req = ServerRequest {
-            msg,
+            msg: msg.clone(),
             ctx: ctx.clone(),
         };
         self.get_internal_mut()
@@ -177,15 +177,15 @@ impl IFabricTransportMessageHandler_Impl for MessageHandler {
 
     fn EndProcessRequest(
         &self,
-        context: &::core::option::Option<IFabricAsyncOperationContext>,
+        context: ::core::option::Option<&IFabricAsyncOperationContext>,
     ) -> ::windows::core::Result<IFabricTransportMessage> {
         //println!("Server Transport end process request");
         if context.is_none() {
             return Err(E_POINTER.into());
         }
 
-        let ctx = context.as_ref().unwrap().clone();
-        let cast = Context::from_interface(&ctx);
+        let ctx = context.unwrap();
+        let cast = Context::from_interface(ctx);
         let msg = cast.get_msg().unwrap();
         Ok(msg)
     }
@@ -193,7 +193,7 @@ impl IFabricTransportMessageHandler_Impl for MessageHandler {
     fn HandleOneWay(
         &self,
         _clientid: *const u16,
-        _message: &::core::option::Option<IFabricTransportMessage>,
+        _message: ::core::option::Option<&IFabricTransportMessage>,
     ) -> ::windows::core::Result<()> {
         Ok(())
     }
@@ -301,7 +301,11 @@ impl ServerRequest {
 
         // notify the reply is ready
         let cb = self.ctx.Callback().unwrap();
-        unsafe { cb.Invoke(&self.ctx.clone().into()) };
+        unsafe {
+            cb.Invoke(&Into::<IFabricAsyncOperationContext>::into(
+                self.ctx.clone(),
+            ))
+        };
     }
 
     pub fn get_request_msg(&self) -> &IFabricTransportMessage {

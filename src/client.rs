@@ -2,11 +2,11 @@
 
 use std::io::Cursor;
 
-use prost::Message;
-use service_fabric_rs::{
+use fabric_base::{
     FabricCommon::FabricTransport::FABRIC_TRANSPORT_SETTINGS, FABRIC_SECURITY_CREDENTIALS,
     FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
 };
+use prost::Message;
 use tonic::{Code, Status};
 use windows::core::{Error, HSTRING};
 

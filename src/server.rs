@@ -2,11 +2,11 @@
 
 use std::{future::Future, sync::Arc};
 
-use prost::Message;
-use service_fabric_rs::{
+use fabric_base::{
     FabricCommon::FabricTransport::{FABRIC_TRANSPORT_LISTEN_ADDRESS, FABRIC_TRANSPORT_SETTINGS},
     FABRIC_SECURITY_CREDENTIALS, FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
 };
+use prost::Message;
 use tonic::async_trait;
 use windows::core::{HSTRING, PCWSTR};
 
@@ -98,9 +98,9 @@ impl ServerInner {
             let mut serveraddr = FABRIC_TRANSPORT_LISTEN_ADDRESS::default();
             let host = HSTRING::from("localhost");
             let path = HSTRING::from("/");
-            serveraddr.IPAddressOrFQDN = PCWSTR::from(&host);
+            serveraddr.IPAddressOrFQDN = PCWSTR(host.as_ptr());
             serveraddr.Port = port;
-            serveraddr.Path = PCWSTR::from(&path);
+            serveraddr.Path = PCWSTR(path.as_ptr());
             listener = ServerTransport::new(&settings, &serveraddr).unwrap();
         }
 

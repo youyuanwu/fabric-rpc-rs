@@ -1,10 +1,10 @@
+use fabric_base::{
+    FabricCommon::FabricTransport::{FABRIC_TRANSPORT_LISTEN_ADDRESS, FABRIC_TRANSPORT_SETTINGS},
+    FABRIC_SECURITY_CREDENTIALS, FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
+};
 use fabric_rpc_rs::{
     server_tr::ServerTransport,
     sys::{Message, MessageViewer},
-};
-use service_fabric_rs::{
-    FabricCommon::FabricTransport::{FABRIC_TRANSPORT_LISTEN_ADDRESS, FABRIC_TRANSPORT_SETTINGS},
-    FABRIC_SECURITY_CREDENTIALS, FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -32,9 +32,9 @@ async fn start_transport_server() {
         let host = HSTRING::from("localhost");
         let path = HSTRING::from("/");
         let serveraddr = FABRIC_TRANSPORT_LISTEN_ADDRESS {
-            IPAddressOrFQDN: PCWSTR::from(&host),
+            IPAddressOrFQDN: PCWSTR(host.as_ptr()),
             Port: 12345,
-            Path: PCWSTR::from(&path),
+            Path: PCWSTR(path.as_ptr()),
         };
         listener = ServerTransport::new(&settings, &serveraddr).unwrap();
     }

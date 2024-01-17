@@ -14,7 +14,7 @@ prost = "0.11"
 path = "../../"
 
 [dependencies.windows]
-version = "0.43"
+version = "0.51"
 features = [
     "Win32_Foundation"
 ]

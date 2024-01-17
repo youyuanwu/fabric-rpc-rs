@@ -10,13 +10,18 @@ tokio = { version = "1", features = ["full"] }
 tonic = "0.9"
 prost = "0.11"
 
-[dependencies.service-fabric-rs]
+[dependencies.fabric_base]
 git = "https://github.com/youyuanwu/service-fabric-rs.git"
-rev = "556073113635e9f0af188e4ccefaffd922b779a7"
-features = ["implement"]
+rev = "3f2bef6eaa5cbbb1b97ee27fb87205ecc9c5ebdb"
+features = [
+    "implement",
+    "ServiceFabric_FabricCommon",
+    "ServiceFabric_FabricCommon_FabricTransport",
+    "Win32_Foundation"
+]
 
 [dependencies.windows]
-version = "0.43"
+version = "0.51"
 features = [
     "Win32_Foundation",
     "implement"

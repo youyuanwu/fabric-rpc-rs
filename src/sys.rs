@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use service_fabric_rs::FabricCommon::{
+use fabric_base::FabricCommon::{
     FabricTransport::{
         IFabricTransportMessage, IFabricTransportMessage_Impl, FABRIC_TRANSPORT_MESSAGE_BUFFER,
     },
@@ -35,7 +35,7 @@ impl AwaitableCallback {
 
 #[allow(non_snake_case)]
 impl IFabricAsyncOperationCallback_Impl for AwaitableCallback {
-    fn Invoke(&self, _context: &::core::option::Option<IFabricAsyncOperationContext>) {
+    fn Invoke(&self, _context: ::core::option::Option<&IFabricAsyncOperationContext>) {
         let op = self.tx.take();
         if let Some(send) = op {
             send.send(()).unwrap();
@@ -65,7 +65,7 @@ impl Context {
     // get a view of Context from interface.
     // This is unsafe. User needs to ensure that arg is of type context
     pub fn from_interface(ctx: &IFabricAsyncOperationContext) -> &Context {
-        let inner = ctx.as_impl();
+        let inner = unsafe { ctx.as_impl() };
         inner
     }
 
@@ -266,7 +266,7 @@ impl StringViewer {
         let pwstr = unsafe { self.s.get_String() };
         let buff = unsafe { pwstr.as_wide() };
         // Hstring takes ownership
-        HSTRING::from_wide(buff)
+        HSTRING::from_wide(buff).unwrap()
     }
 }
 
@@ -274,7 +274,7 @@ pub fn raw_to_hstring(raw: *const u16) -> HSTRING {
     let ptr = PCWSTR::from_raw(raw);
     let id_slice = unsafe { ptr.as_wide() };
     // hstring does not have hash impl
-    HSTRING::from_wide(id_slice)
+    HSTRING::from_wide(id_slice).unwrap()
 }
 
 #[cfg(test)]
@@ -295,7 +295,9 @@ mod tests {
     async fn test_ctx() {
         let (callback, rx) = AwaitableCallback::create();
         let mut ctx = Context::new(callback.clone());
-        unsafe { callback.Invoke(&ctx.clone().into()) };
+        let i_ctx: IFabricAsyncOperationContext = ctx.clone().into();
+
+        unsafe { callback.Invoke(&i_ctx) };
         ctx.complete();
         rx.await.unwrap();
         let ictx: IFabricAsyncOperationContext = ctx.into();

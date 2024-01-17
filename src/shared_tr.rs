@@ -1,6 +1,6 @@
 // shared transport stuff
 
-use service_fabric_rs::FabricCommon::FabricTransport::{
+use fabric_base::FabricCommon::FabricTransport::{
     IFabricTransportMessage, IFabricTransportMessageDisposer, IFabricTransportMessageDisposer_Impl,
 };
 use windows::core::implement;

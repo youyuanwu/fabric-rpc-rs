@@ -1,4 +1,4 @@
-use service_fabric_rs::{
+use fabric_base::{
     FabricCommon::FabricTransport::{FABRIC_TRANSPORT_LISTEN_ADDRESS, FABRIC_TRANSPORT_SETTINGS},
     FABRIC_E_CONNECTION_CLOSED_BY_REMOTE_END, FABRIC_SECURITY_CREDENTIALS,
     FABRIC_SECURITY_CREDENTIAL_KIND_NONE,
@@ -27,9 +27,9 @@ async fn fabric_transport() {
     let mut serveraddr = FABRIC_TRANSPORT_LISTEN_ADDRESS::default();
     let host = HSTRING::from("localhost");
     let path = HSTRING::from("/");
-    serveraddr.IPAddressOrFQDN = PCWSTR::from(&host);
+    serveraddr.IPAddressOrFQDN = PCWSTR(host.as_ptr());
     serveraddr.Port = 12345;
-    serveraddr.Path = PCWSTR::from(&path);
+    serveraddr.Path = PCWSTR(path.as_ptr());
 
     let (stoptx, mut stoprx) = tokio::sync::oneshot::channel::<()>();
 
@@ -50,9 +50,9 @@ async fn fabric_transport() {
             let mut serveraddr = FABRIC_TRANSPORT_LISTEN_ADDRESS::default();
             let host = HSTRING::from("localhost");
             let path = HSTRING::from("/");
-            serveraddr.IPAddressOrFQDN = PCWSTR::from(&host);
+            serveraddr.IPAddressOrFQDN = PCWSTR(host.as_ptr());
             serveraddr.Port = 12345;
-            serveraddr.Path = PCWSTR::from(&path);
+            serveraddr.Path = PCWSTR(path.as_ptr());
             listener = ServerTransport::new(&settings, &serveraddr).unwrap();
         }
 
